@@ -27,7 +27,7 @@ COUNTDOWN_HTML = os.path.join(app_folder, "countdown.html")
 GONOGO_HTML = os.path.join(app_folder, "gonogo.html")
 SHEET_LINK = ""
 session = requests.Session()
-appVersion = "0.6.0"
+appVersion = "0.6.1"
 SETTINGS_FILE = os.path.join(app_folder, "settings.json")
 
 # Default settings
@@ -237,7 +237,9 @@ body {{
 #timer {{ font-size: {timer_px}px; margin-bottom: 40px; }}
 </style>
 <script>
-setTimeout(() => location.reload(), 1000);
+  setTimeout(() => {{
+    location.href = location.href.split('?')[0] + '?t=' + Date.now();
+  }}, 1000);
 </script>
 </head>
 <body>
@@ -303,7 +305,9 @@ body {{
 .nogo {{ color: {gn_nogo}; }}
 </style>
 <script>
-setTimeout(() => location.reload(), 5000);
+  setTimeout(() => {{
+    location.href = location.href.split('?')[0] + '?t=' + Date.now();
+  }}, 5000);
 </script>
 </head>
 <body>
@@ -641,8 +645,6 @@ class CountdownApp:
             width=10,
         )
         self.settings_btn.grid(row=0, column=4, padx=6)
-
-        # Note: gonogo mode switching remains in Settings; manual buttons appear when mode == 'buttons'
 
         # Manual Go/No-Go buttons will go next to control buttons
         self.manual_frame = tk.Frame(root, bg="black")
