@@ -27,7 +27,7 @@ COUNTDOWN_HTML = os.path.join(app_folder, "countdown.html")
 GONOGO_HTML = os.path.join(app_folder, "gonogo.html")
 SHEET_LINK = ""
 session = requests.Session()
-appVersion = "0.6.1"
+appVersion = "0.7.0"
 SETTINGS_FILE = os.path.join(app_folder, "settings.json")
 
 # Default settings
@@ -53,6 +53,8 @@ DEFAULT_SETTINGS.setdefault("gn_bg_color", "#111111")
 DEFAULT_SETTINGS.setdefault("gn_border_color", "#FFFFFF")
 DEFAULT_SETTINGS.setdefault("gn_go_color", "#00FF00")
 DEFAULT_SETTINGS.setdefault("gn_nogo_color", "#FF0000")
+DEFAULT_SETTINGS.setdefault("gn_caution_color", "#FFA500")  # orange
+DEFAULT_SETTINGS.setdefault("html_gn_caution_color", "#FFA500")
 DEFAULT_SETTINGS.setdefault("gn_font_px", 20)
 DEFAULT_SETTINGS.setdefault("appearance_mode", "dark")
 
@@ -133,15 +135,27 @@ def fetch_gonogo():
     mode = settings.get("mode", "spreadsheet")
     # If manual mode, read values from a runtime stash (set by the GUI buttons)
     if mode == "buttons":
-        # stored values will be on the app class; fallback to N/A
+        # stored values will be on the function object (set by the GUI dialog/buttons)
         try:
-            return [
-                getattr(fetch_gonogo, "manual_range", "N/A"),
-                getattr(fetch_gonogo, "manual_weather", "N/A"),
-                getattr(fetch_gonogo, "manual_vehicle", "N/A"),
-            ]
+            range_val = getattr(fetch_gonogo, "manual_range", "N/A")
+            weather_val = getattr(fetch_gonogo, "manual_weather", "N/A")
+            vehicle_val = getattr(fetch_gonogo, "manual_vehicle", "N/A")
+
+            # If values are numeric strings or numbers, we keep them numeric (so formatting + coloring works)
+            # convert empty strings -> "N/A"
+            def normv(v):
+                if v is None:
+                    return "N/A"
+                s = str(v).strip()
+                if s == "":
+                    return "N/A"
+                return s
+
+            return [normv(range_val), normv(weather_val), normv(vehicle_val)]
         except Exception:
             return ["N/A", "N/A", "N/A"]
+
+
 
     # spreadsheet mode
     link = settings.get("sheet_link", SHEET_LINK)
@@ -172,32 +186,79 @@ def fetch_gonogo():
 # Helper for color
 # -------------------------
 def get_status_color(status):
-    """Return color name for a Go/No-Go status string."""
+    """
+    Accepts status which may be:
+      - a percentage string/number (e.g. '82', '82.0', 82)
+      - 'GO', 'NO-GO', 'CAUTION' or variants
+      - anything else -> white
+    Returns CSS color names / hex strings.
+    """
     try:
-        s = str(status or "").strip().upper()
-        # normalize to letters only so variants like 'NO GO', 'NO-GO', 'NOGO' match
-        norm = re.sub(r"[^A-Z]", "", s)
+        if status is None:
+            return "white"
+        s = str(status).strip()
+        # Try numeric percentage first
+        try:
+            pct = float(s.replace("%", ""))
+
+            # Bound it to 0..100
+            pct = max(0.0, min(100.0, pct))
+            if pct >= 75.0:
+                return "green"
+            if pct >= 50.0:
+                return "orange"
+            return "red"
+        except Exception:
+            pass
+
+        # Non-numeric: interpret standard words
+        norm = re.sub(r"[^A-Z]", "", s.upper())
         if norm == "GO":
             return "green"
-        if norm == "NOGO":
+        if norm == "NOGO" or norm == "NOGO" or norm == "NOGO":
             return "red"
-        # fallback: treat unknown/empty as white
+        if norm == "CAUTION" or norm == "CAUT":
+            return "orange"
         return "white"
     except Exception:
         return "white"
 
 
 def format_status_display(status):
+    """
+    Formats the status for display:
+    - numeric -> 'NN%' (rounded as needed)
+    - 'NO-GO'/'GO' -> canonical formatting
+    - otherwise return original string
+    """
     try:
-        s = str(status or "").strip().upper()
-        norm = re.sub(r"[^A-Z]", "", s)
+        if status is None:
+            return "N/A"
+        s = str(status).strip()
+        # numeric
+        try:
+            pct = float(s)
+            # bound and show as integer if whole, else one decimal
+            pct = max(0.0, min(100.0, pct))
+            if abs(pct - round(pct)) < 0.001:
+                return f"{int(round(pct))}%"
+            return f"{pct:.1f}%"
+        except Exception:
+            pass
+
+        # canonical text forms
+        norm = re.sub(r"[^A-Z]", "", s.upper())
         if norm == "GO":
             return "GO"
         if norm == "NOGO":
             return "NO-GO"
+        if norm == "CAUTION":
+            return "CAUTION"
+        # fallback to raw
         return s
     except Exception:
         return str(status or "")
+
 
 
 # -------------------------
@@ -251,30 +312,28 @@ body {{
         f.write(html)
 
 
-# -------------------------
-# Write Go/No-Go HTML
-# -------------------------
 def write_gonogo_html(gonogo_values=None):
     if gonogo_values is None:
         gonogo_values = ["N/A", "N/A", "N/A"]
     s = load_settings()
-    # Prefer HTML-specific settings; fall back to GUI appearance settings for backwards compatibility
     bg = s.get("html_bg_color", s.get("bg_color", "#000000"))
     text = s.get("html_text_color", s.get("text_color", "#FFFFFF"))
     font = s.get("html_font_family", s.get("font_family", "Consolas, monospace"))
     gn_bg = s.get("html_gn_bg_color", s.get("gn_bg_color", "#111111"))
     gn_border = s.get("html_gn_border_color", s.get("gn_border_color", "#FFFFFF"))
-    gn_go = s.get("html_gn_go_color", s.get("gn_go_color", "#00FF00"))
-    gn_nogo = s.get("html_gn_nogo_color", s.get("gn_nogo_color", "#FF0000"))
     gn_px = int(s.get("html_gn_font_px", s.get("gn_font_px", 28)))
-    # normalize and format display values so variants like 'NO GO' become 'NO-GO'
-    disp0 = format_status_display(gonogo_values[0])
-    disp1 = format_status_display(gonogo_values[1])
-    disp2 = format_status_display(gonogo_values[2])
-    n0 = re.sub(r"[^A-Z]", "", (str(gonogo_values[0] or "")).strip().upper())
-    n1 = re.sub(r"[^A-Z]", "", (str(gonogo_values[1] or "")).strip().upper())
-    n2 = re.sub(r"[^A-Z]", "", (str(gonogo_values[2] or "")).strip().upper())
 
+    # Prepare display text and color for each item
+    disp = [format_status_display(v) for v in gonogo_values]
+
+    def pick_css_color(v):
+        return get_status_color(v)
+
+    c0 = pick_css_color(gonogo_values[0])
+    c1 = pick_css_color(gonogo_values[1])
+    c2 = pick_css_color(gonogo_values[2])
+
+    # Inline style approach per box to ensure color picks up numeric/word cases
     html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -301,8 +360,6 @@ body {{
     text-align: center;
     background-color: {gn_bg};
 }}
-.go {{ color: {gn_go}; }}
-.nogo {{ color: {gn_nogo}; }}
 </style>
 <script>
   setTimeout(() => {{
@@ -312,14 +369,15 @@ body {{
 </head>
 <body>
     <div id="gonogo">
-    <div class="status-box {'go' if n0=='GO' else 'nogo'}">Range: {disp0}</div>
-    <div class="status-box {'go' if n2=='GO' else 'nogo'}">Vehicle: {disp2}</div>
-    <div class="status-box {'go' if n1=='GO' else 'nogo'}">Weather: {disp1}</div>
+    <div class="status-box" style="color: {c0};">Range: {disp[0]}</div>
+    <div class="status-box" style="color: {c2};">Vehicle: {disp[2]}</div>
+    <div class="status-box" style="color: {c1};">Weather: {disp[1]}</div>
 </div>
 </body>
 </html>"""
     with open(GONOGO_HTML, "w", encoding="utf-8") as f:
         f.write(html)
+
 
 
 # -------------------------
@@ -670,6 +728,16 @@ class CountdownApp:
             command=lambda: self._toggle_manual("vehicle"),
         )
 
+        # new button to open manual percentage dialog
+        self.manual_percent_btn = tk.Button(
+            self.manual_frame,
+            text="Manual Percentages...",
+            width=18,
+            command=self.open_manual_percent_dialog,
+        )
+        self.manual_percent_btn.grid(row=1, column=0, columnspan=3, pady=(6,0))
+
+
         # Placeholders; visibility will be controlled by settings
         self.range_toggle_btn.grid(row=0, column=0, padx=4, pady=2)
         self.weather_toggle_btn.grid(row=0, column=1, padx=4, pady=2)
@@ -712,6 +780,101 @@ class CountdownApp:
         except Exception:
             pass
         self.update_clock()
+    
+    def open_manual_percent_dialog(self):
+        """Open dialog to set manual percentages for Range, Weather, Vehicle.
+           Stores values on fetch_gonogo function so fetch_gonogo() reads them."""
+        dlg = tk.Toplevel(self.root)
+        dlg.transient(self.root)
+        dlg.title("Manual Percentages (0-100)")
+        dlg.geometry("360x180")
+        ssettings = load_settings()
+        mode_local = ssettings.get("appearance_mode", "dark")
+        if mode_local == "dark":
+            dlg_bg = "#000000"
+            dlg_fg = "#FFFFFF"
+            entry_bg = "#222222"
+            btn_bg = "#FFFFFF"
+            btn_fg = "#000000"
+        else:
+            dlg_bg = "#FFFFFF"
+            dlg_fg = "#000000"
+            entry_bg = "#b4b4b4"
+            btn_bg = "#000000"
+            btn_fg = "#FFFFFF"
+        dlg.config(bg=dlg_bg)
+
+        tk.Label(dlg, text="Weather (%)", fg=dlg_fg, bg=dlg_bg).pack(pady=(8, 0))
+        w_entry = tk.Entry(dlg, bg=entry_bg, fg=dlg_fg, insertbackground=dlg_fg)
+        w_entry.pack()
+
+        # populate with existing manual values (if any)
+        try:
+            w = getattr(fetch_gonogo, "manual_weather", "")
+            w_entry.insert(0, str(w))
+        except Exception:
+            pass
+
+        def do_save():
+            def clean_val(x):
+                try:
+                    if x is None:
+                        return ""
+                    s = str(x).strip()
+                    if s == "":
+                        return ""
+                    # try to parse numeric; if numeric, store as number-ish string
+                    f = float(s)
+                    # clamp 0..100
+                    f = max(0.0, min(100.0, f))
+                    # store as int if whole
+                    if abs(f - round(f)) < 0.001:
+                        return str(int(round(f)))
+                    return f"{f:.1f}"
+                except Exception:
+                    # store raw (allow GO/NOGO legacy)
+                    return s
+
+            try:
+                fetch_gonogo.manual_weather = clean_val(w_entry.get())
+            except Exception:
+                pass
+            # update local labels immediately
+            self.gonogo_values = fetch_gonogo()
+            self._refresh_gonogo_labels()
+            dlg.destroy()
+
+        btnf = tk.Frame(dlg, bg=dlg_bg)
+        btnf.pack(fill="x", pady=8)
+        tk.Button(btnf, text="Save", command=do_save, width=10, bg=btn_bg, fg=btn_fg).pack(
+            side="right", padx=8
+        )
+        tk.Button(btnf, text="Cancel", command=dlg.destroy, width=10, bg=btn_bg, fg=btn_fg).pack(
+            side="right"
+        )
+
+
+    def _refresh_gonogo_labels(self):
+        # reads current gonogo_values and updates the three label widgets with color
+        try:
+            vals = self.gonogo_values
+            # in case gonogo_values is stale, fetch again
+            if not vals or len(vals) < 3:
+                vals = fetch_gonogo()
+                self.gonogo_values = vals
+            # format and apply colors
+            r_disp = format_status_display(vals[0])
+            w_disp = format_status_display(vals[1])
+            v_disp = format_status_display(vals[2])
+            self.range_label.config(text=f"RANGE: {r_disp}", fg=get_status_color(vals[0]))
+            self.weather_label.config(text=f"WEATHER: {w_disp}", fg=get_status_color(vals[1]))
+            self.vehicle_label.config(text=f"VEHICLE: {v_disp}", fg=get_status_color(vals[2]))
+            # also write out the html so external display updates
+            write_gonogo_html(vals)
+            self.last_gonogo_update = time.time()
+        except Exception:
+            pass
+
 
     # ----------------------------
     # Settings window
@@ -1323,14 +1486,8 @@ class CountdownApp:
             self.weather_label.config(
                 text=f"WEATHER: {display_weather}", bg=bg, font=(font_family, gn_px)
             )
-            wv = (weather_val or "").strip().upper()
-            wnorm = re.sub(r"[^A-Z]", "", wv)
-            if wnorm == "GO":
-                self.weather_label.config(fg=gn_go)
-            elif wnorm == "NOGO":
-                self.weather_label.config(fg=gn_nogo)
-            else:
-                self.weather_label.config(fg=text)
+            color = get_status_color(weather_val)
+            self.weather_label.config(fg=color)
         except Exception:
             pass
 
