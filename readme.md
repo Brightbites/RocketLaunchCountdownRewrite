@@ -7,7 +7,7 @@ Features Added:
 
 
 OBS INSTRUCTIONS
-For setting up the HTMLs for use in OBS. Do the following:
+For setting up the HTML sources to use in OBS, or similiar softwares. Follow the below steps:
 1. Create a browser source
 2. Select "Local file"
 3. Select html file
