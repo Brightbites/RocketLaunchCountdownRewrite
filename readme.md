@@ -15,6 +15,7 @@ For setting up the HTML sources to use in OBS, or similiar softwares. Follow the
 5. Install the extension "xObsBrowserAutoRefresh"
     - Download from https://obsproject.com/forum/resources/xobsbrowserautorefresh-timed-automatic-browser-source-refreshing.1677
     - Set auto refresh times to whatever you desire.
+        - NOTE: The faster the refresh time the smaller the chance is of the cache crashing
 
 INSTALL INSTRUCTIONS
 
