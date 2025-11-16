@@ -12,6 +12,9 @@ For setting up the HTML sources to use in OBS, or similiar softwares. Follow the
 2. Select "Local file"
 3. Select html file
 4. Check both "Shutdown source when not visible" and "Refresh browser when scene becomes active"
+5. Install the extension "xObsBrowserAutoRefresh"
+    - Download from https://obsproject.com/forum/resources/xobsbrowserautorefresh-timed-automatic-browser-source-refreshing.1677
+    - Set auto refresh times to whatever you desire.
 
 INSTALL INSTRUCTIONS
 

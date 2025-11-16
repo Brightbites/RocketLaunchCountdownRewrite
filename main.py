@@ -259,8 +259,6 @@ def format_status_display(status):
     except Exception:
         return str(status or "")
 
-
-
 # -------------------------
 # Write Countdown HTML
 # -------------------------
@@ -283,6 +281,7 @@ def write_countdown_html(mission_name, timer_text):
 <html>
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="refresh" content="1">
 <style>
 body {{
     margin: 0;
@@ -297,11 +296,6 @@ body {{
 #mission {{ font-size: {mission_px}px; margin-bottom: 0; }}
 #timer {{ font-size: {timer_px}px; margin-bottom: 40px; }}
 </style>
-<script>
-  setTimeout(() => {{
-    location.href = location.href.split('?')[0] + '?t=' + Date.now();
-  }}, 1000);
-</script>
 </head>
 <body>
 {mission_div_hidden}
