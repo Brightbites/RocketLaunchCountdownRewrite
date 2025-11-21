@@ -30,6 +30,8 @@ session = requests.Session()
 appVersion = "0.7.0"
 SETTINGS_FILE = os.path.join(app_folder, "settings.json")
 
+concerns_list = []
+
 # Default settings
 DEFAULT_SETTINGS = {
     "mode": "spreadsheet",
@@ -37,8 +39,9 @@ DEFAULT_SETTINGS = {
     "range_row": 2,
     "weather_row": 3,
     "vehicle_row": 4,
+    "major_concerns_row": 9,
     "column": 12,
-    "hide_mission_name": False
+    "hide_mission_name": True
 }
 # default timezone: 'local' uses system local tz, otherwise an IANA name or 'UTC'
 DEFAULT_SETTINGS.setdefault("timezone", "local")
@@ -91,6 +94,11 @@ DEFAULT_SETTINGS.setdefault("html_gn_font_px", DEFAULT_SETTINGS.get("gn_font_px"
 # Auto-hold times: list of seconds before T at which timer should automatically enter hold
 DEFAULT_SETTINGS.setdefault("auto_hold_times", [])
 
+DEFAULT_SETTINGS.setdefault("major_concerns_cell", "L9")
+
+# How often (seconds) to refresh major concerns from the sheet
+DEFAULT_SETTINGS.setdefault("concerns_update_interval", 2)
+
 # A small list of common timezone choices.
 TIMEZONE_CHOICES = [
     "local",
@@ -110,7 +118,12 @@ def load_settings():
     try:
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r", encoding="utf-8") as fh:
-                return json.load(fh)
+                loaded = json.load(fh)
+                # Merge loaded settings with defaults so missing keys get sane values
+                merged = DEFAULT_SETTINGS.copy()
+                if isinstance(loaded, dict):
+                    merged.update(loaded)
+                return merged
     except Exception:
         pass
     # ensure default saved
@@ -182,9 +195,6 @@ def fetch_gonogo():
         return ["ERROR", "ERROR", "ERROR"]
 
 
-# -------------------------
-# Helper for color
-# -------------------------
 def get_status_color(status):
     """
     Accepts status which may be:
@@ -259,9 +269,142 @@ def format_status_display(status):
     except Exception:
         return str(status or "")
 
-# -------------------------
-# Write Countdown HTML
-# -------------------------
+
+def fetch_major_concerns_from_sheet():
+    """Fetch major concerns from the same CSV sheet used by fetch_gonogo().
+
+    Returns a list of non-empty strings. This mirrors the safe access
+    pattern in `fetch_gonogo()`:
+      - uses `session.get()` to fetch the CSV
+      - respects `major_concerns_cell` (A1-style) if configured
+      - splits multi-item cell values on newlines or semicolons
+      - falls back to `major_concerns_row` and returns non-empty cells from that row
+    """
+    settings = load_settings()
+    link = settings.get("sheet_link", SHEET_LINK)
+    cell_ref = settings.get("major_concerns_cell", "").upper().strip()
+
+    def col_letters_to_index(letters):
+        result = 0
+        for c in letters:
+            result = result * 26 + (ord(c.upper()) - ord('A') + 1)
+        return result - 1
+
+    try:
+        resp = session.get(link, timeout=3)
+        resp.raise_for_status()
+        reader = csv.reader(io.StringIO(resp.text))
+        data = list(reader)
+
+        try:
+            print(f"[DEBUG] fetch_major_concerns_from_sheet: cell={cell_ref!r}, rows={len(data)}")
+        except Exception:
+            pass
+
+        concerns = []
+
+        if cell_ref:
+            # allow multiple cell refs separated by comma/semicolon/whitespace, e.g. "L9, L10"
+            tokens = [t.strip() for t in re.split(r"[;,\s]+", cell_ref) if t.strip()]
+            for tok in tokens:
+                m = re.match(r"^([A-Z]+)(\d+)$", tok)
+                if not m:
+                    continue
+                col_letters, row_str = m.groups()
+                row_idx = int(row_str) - 1
+                col_idx = col_letters_to_index(col_letters)
+                if 0 <= row_idx < len(data):
+                    row = data[row_idx]
+                    if 0 <= col_idx < len(row):
+                        val = row[col_idx].strip()
+                        if val:
+                            # split cell contents on newline, semicolon or comma into separate concerns
+                            parts = re.split(r"[\r\n,;]+", val)
+                            for p in parts:
+                                p = p.strip()
+                                if p:
+                                    concerns.append(p)
+
+        # fallback: use configured major_concerns_row
+        if not concerns:
+            row_idx = int(settings.get("major_concerns_row", DEFAULT_SETTINGS.get("major_concerns_row", 9))) - 1
+            if 0 <= row_idx < len(data):
+                concerns = [c.strip() for c in data[row_idx] if c.strip()]
+
+        return concerns if concerns else ["No concerns listed"]
+
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch major concerns from sheet: {e}")
+        return ["ERROR fetching concerns"]
+
+
+def fetch_major_concerns():
+    """Compatibility wrapper for existing callers.
+
+    Calls `fetch_major_concerns_from_sheet()` so other parts of the code
+    that expect `fetch_major_concerns()` continue to work.
+    """
+    try:
+        return fetch_major_concerns_from_sheet()
+    except Exception:
+        return ["ERROR fetching concerns"]
+    
+
+
+
+def write_major_concerns_html(concerns_list=None):
+    if concerns_list is None:
+        concerns_list = []
+
+    s = load_settings()
+    bg = s.get("html_bg_color", s.get("bg_color", "#000000"))
+    text = s.get("html_text_color", s.get("text_color", "#FFFFFF"))
+    font = s.get("html_font_family", s.get("font_family", "Consolas, monospace"))
+    font_size = s.get("html_mission_font_px", 32)  # adjust size for concerns
+
+    # Build HTML for the concerns
+    concerns_html = ""
+    if concerns_list:
+        concerns_html += "<ul style='list-style-type: disc; padding-left: 40px; text-align: left;'>\n"
+        for concern in concerns_list:
+            concerns_html += f"  <li>{concern}</li>\n"
+        concerns_html += "</ul>\n"
+    else:
+        concerns_html = "<p>No major concerns</p>"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="5">
+<style>
+body {{
+    margin: 0;
+    background-color: {bg};
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: {text};
+    font-family: {font};
+    font-size: {font_size}px;
+}}
+ul {{
+    margin: 0;
+}}
+</style>
+</head>
+<body>
+<h2>Major Concerns</h2>
+{concerns_html}
+</body>
+</html>"""
+
+    concerns_file = os.path.join(app_folder, "major_concerns.html")
+    with open(concerns_file, "w", encoding="utf-8") as f:
+        f.write(html)
+
+
 def write_countdown_html(mission_name, timer_text):
     s = load_settings()
     # Prefer HTML-specific settings; fall back to GUI appearance settings for backwards compatibility
@@ -396,7 +539,11 @@ class CountdownApp:
         self.mission_name = "Placeholder Mission"
         # fetch_gonogo() returns [Range, Weather, Vehicle] to match gonogo.html writer
         self.gonogo_values = fetch_gonogo()
+        self.major_concerns = fetch_major_concerns()
+        write_major_concerns_html(self.major_concerns)
         self.last_gonogo_update = time.time()
+        # track last time we refreshed major concerns
+        self.last_concerns_update = time.time()
         # track which auto-holds we've already triggered for the current run
         self._auto_hold_triggered = set()
         # count mode
@@ -753,6 +900,11 @@ class CountdownApp:
         )
         self.vehicle_label.pack()
 
+        self.concerns_label = tk.Label(
+            frame_gn, text=F"Major Concerns: {self.major_concerns}" , font=("Consolas", 14), fg="white", bg="black"
+        )
+        self.concerns_label.pack()
+
         # Footer
         footer_frame = tk.Frame(root, bg="black")
         footer_frame.pack(side="bottom", pady=0, fill="x")
@@ -1063,6 +1215,37 @@ class CountdownApp:
         except Exception:
             vehicle_cell.insert(0, f"L5")
 
+        tk.Label(
+        cell_frame, text="Major concerns cell (e.g. L6):", fg=win_text, bg=win_bg
+        ).grid(row=1, column=0, sticky="w")
+        major_concerns_cell = tk.Entry(
+            cell_frame,
+            width=8,
+            fg=range_cell_fg,
+            bg=range_cell_bg,
+            insertbackground=range_cell_fg,
+        )
+        major_concerns_cell.grid(row=1, column=1, padx=4)
+        try:
+            if "major_concerns_cell" in settings:
+                major_concerns_cell.insert(0, settings.get("major_concerns_cell"))
+            else:
+                col = settings.get("column", DEFAULT_SETTINGS["column"])
+                row = settings.get("major_concerns_row", DEFAULT_SETTINGS["major_concerns_row"])
+
+                def col_to_letters(n):
+                    s = ""
+                    while n > 0:
+                        n, r = divmod(n - 1, 26)
+                        s = chr(ord("A") + r) + s
+                    return s
+
+                major_concerns_cell.insert(0, f"{col_to_letters(col)}{row}")
+        except Exception:
+            # fall back to the canonical default setting (keeps UI/defaults consistent)
+            major_concerns_cell.insert(0, settings.get("major_concerns_cell", DEFAULT_SETTINGS.get("major_concerns_cell", "L9")))
+
+
         # Manual buttons config
         frame_buttons_cfg = tk.LabelFrame(
             win, text="Manual Go/No-Go (Buttons mode)", fg=win_text, bg=win_bg
@@ -1172,6 +1355,8 @@ class CountdownApp:
                 "range_cell": range_cell.get().strip().upper(),
                 "weather_cell": weather_cell.get().strip().upper(),
                 "vehicle_cell": vehicle_cell.get().strip().upper(),
+                # persist major concerns cell if provided
+                "major_concerns_cell": major_concerns_cell.get().strip().upper(),
                 # persist manual values if present
                 "manual_range": getattr(fetch_gonogo, "manual_range", None),
                 "manual_weather": getattr(fetch_gonogo, "manual_weather", None),
@@ -1967,16 +2152,14 @@ class CountdownApp:
         new_val = "NO-GO" if cur_val == "GO" else "GO"
         self.set_manual(which, new_val)
 
-    # ----------------------------
-    # Control logic
-    # ----------------------------
+    
     def start(self):
         self.mission_name = self.mission_entry.get().strip() or "Placeholder Mission"
         self.running = True
         self.on_hold = False
         self.scrubbed = False
-        self.counting_up = False
         self.show_hold_button()
+        self._auto_hold_triggered = set()
 
         try:
             if self.mode_var.get() == "duration":
@@ -1986,41 +2169,28 @@ class CountdownApp:
                 total_seconds = h * 3600 + m * 60 + s
             else:
                 now = datetime.now()
-                # read separate HH, MM, SS boxes
                 h = int(self.clock_hours_entry.get() or 0)
                 m = int(self.clock_minutes_entry.get() or 0)
                 s = int(self.clock_seconds_entry.get() or 0)
-                # determine timezone from settings
+
                 ssettings = load_settings()
-                tzname = ssettings.get(
-                    "timezone", DEFAULT_SETTINGS.get("timezone", "local")
-                )
+                tzname = ssettings.get("timezone", DEFAULT_SETTINGS.get("timezone", "local"))
+
                 if ZoneInfo is None or tzname in (None, "", "local"):
-                    # naive local time handling (existing behavior) — use timedelta to roll day
-                    target_today = now.replace(
-                        hour=h, minute=m, second=s, microsecond=0
-                    )
+                    target_today = now.replace(hour=h, minute=m, second=s, microsecond=0)
                     if target_today <= now:
                         target_today = target_today + timedelta(days=1)
                     total_seconds = (target_today - now).total_seconds()
                 else:
                     try:
                         tz = ZoneInfo(tzname)
-                        # construct aware "now" in that timezone and create the target time
                         now_tz = datetime.now(tz)
-                        target = now_tz.replace(
-                            hour=h, minute=m, second=s, microsecond=0
-                        )
-                        # if target already passed in that tz, roll to next day
+                        target = now_tz.replace(hour=h, minute=m, second=s, microsecond=0)
                         if target <= now_tz:
                             target = target + timedelta(days=1)
-                        # compute total seconds using aware-datetime subtraction to avoid epoch mixing
                         total_seconds = (target - now_tz).total_seconds()
                     except Exception:
-                        # fallback to naive local behavior
-                        target_today = now.replace(
-                            hour=h, minute=m, second=s, microsecond=0
-                        )
+                        target_today = now.replace(hour=h, minute=m, second=s, microsecond=0)
                         if target_today <= now:
                             target_today = target_today + timedelta(days=1)
                         total_seconds = (target_today - now).total_seconds()
@@ -2029,8 +2199,23 @@ class CountdownApp:
             write_countdown_html(self.mission_name, "Invalid time")
             return
 
-        self.target_time = time.time() + total_seconds
-        self.remaining_time = total_seconds
+        now_time = time.time()
+        mode = self.count_mode.get()
+
+        if mode in ("T-", "L-"):
+            # countdown
+            self.target_time = now_time + total_seconds
+            self.counting_up = False
+            self.remaining_time = total_seconds
+        elif mode in ("T+", "L+"):
+            # count up
+            self.target_time = now_time - total_seconds
+            self.counting_up = True
+            self.remaining_time = total_seconds
+
+        # Immediately update display
+        #self.update_clock()
+
 
     def hold(self):
         if self.running and not self.on_hold and not self.scrubbed:
@@ -2162,6 +2347,32 @@ class CountdownApp:
             self.gonogo_values = [self.range_status, self.weather, self.vehicle]
             write_gonogo_html(self.gonogo_values)
             self.last_gonogo_update = now_time
+
+        # Update Major Concerns on a configurable interval
+        try:
+            s = load_settings()
+            interval = float(s.get("concerns_update_interval", DEFAULT_SETTINGS.get("concerns_update_interval", 10)))
+        except Exception:
+            interval = DEFAULT_SETTINGS.get("concerns_update_interval", 10)
+
+        if now_time - getattr(self, "last_concerns_update", 0) > interval:
+            try:
+                concerns = fetch_major_concerns()
+                # update runtime state and HTML
+                self.major_concerns = concerns
+                write_major_concerns_html(concerns)
+                # update GUI label concisely
+                try:
+                    display = ", ".join(concerns) if isinstance(concerns, (list, tuple)) else str(concerns)
+                    # shorten if very long
+                    if len(display) > 200:
+                        display = display[:197] + "..."
+                    self.concerns_label.config(text=f"Major Concerns: {display}")
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"[DEBUG] failed to refresh major concerns: {e}")
+            self.last_concerns_update = now_time
 
         self.root.after(200, self.update_clock)
 
