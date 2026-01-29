@@ -1,11 +1,20 @@
 from Rewrite import *
+import time
 
 link = ""
-fetch_gonogo()
-fetch_major_concerns()
+fetchGonogo()
+fetchMajorConcerns()
 
-print(update_gonogo())
-print(update_major_concerns())
+print(updateGonogo())
+print(updateMajorConcerns())
 
 #T and L toggle
 #Scrub
+
+structTime = time.strptime("29 January 2026 20 21 0", "%d %B %Y %H %M %S")
+getLaunchTime(structTime)
+while True:
+    t1 = time.monotonic()
+    print(updateCountdown())
+    t2 = time.monotonic()
+    sleep(1.0 - (t2 - t1))

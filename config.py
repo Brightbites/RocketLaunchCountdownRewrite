@@ -14,6 +14,7 @@ Border_Color = "#FFFFFF"
 Go_Color = "#00FF00"
 No-Go_Color = "#FF0000"
 Caution_Color = "#FFA500"
+Concerns_Update_Rate = 2
 Font_Size = 20
 
 [Other]

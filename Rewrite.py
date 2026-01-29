@@ -1,17 +1,18 @@
 import csv
 import io
 import requests
+from time import *
+from calendar import timegm
 
 session = requests.Session()
 
-def fetch_gonogo(Manual, GUIVariables, link):
-    # Make GoNoGo Global
+def fetchGonogo(Manual = False, GUIVariables = ["N/A", "N/A", "N/A"], link = None):
     global weather, Range, vehicle
     # if GUI controlled
     if Manual:
         try:
             # Get Range, Weather and vehicle from GUI
-            Range = GUIVariables[0]
+            Range   = GUIVariables[0]
             weather = GUIVariables[1]
             vehicle = GUIVariables[2]
             return[Range, weather, vehicle]
@@ -25,8 +26,7 @@ def fetch_gonogo(Manual, GUIVariables, link):
         vehicle = pullSpreedsheet(16, 2, link)
         return[Range, weather, vehicle]
 
-def fetch_major_concerns(Manual = False, GUIVariables = None, link = None):
-    # Make concerns global
+def fetchMajorConcerns(Manual = True, GUIVariables = "N/A", link = None):
     global concerns
     # if GUI controlled
     if Manual:
@@ -42,10 +42,10 @@ def fetch_major_concerns(Manual = False, GUIVariables = None, link = None):
         concerns = pullSpreedsheet(11, 4, link)
         return concerns 
 
-def update_gonogo():
+def updateGonogo():
     return[Range, weather, vehicle]
 
-def update_major_concerns():
+def updateMajorConcerns():
     return concerns
 
 def pullSpreedsheet(inputCol, inputRow, link):
@@ -67,4 +67,20 @@ def pullSpreedsheet(inputCol, inputRow, link):
         return pulledcell[0]
     except Exception as e:
         print(f"[ERROR] Failed to fetch Go/No-Go from sheet: {e}")
-        return None
+        return "N/A"
+
+def getLaunchTime(structTime):
+    global launchTime
+    launchTime = timegm(structTime)
+
+def updateCountdown():
+    # are we counting up yet?
+    if time() > launchTime:
+        countUp = False
+    else: countUp = True
+    # return the secconds till or after launchTime
+    # possible overflow, may need to swap time() with monotonic()
+    if countUp:
+        return int(launchTime - time() + 1)
+    else:
+        return int(time() - launchTime)
