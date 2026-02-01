@@ -26,14 +26,13 @@ def fetchGonogo(Manual = False, GUIVariables = ["N/A", "N/A", "N/A"], link = Non
         vehicle = pullSpreedsheet(16, 2, link)
         return[Range, weather, vehicle]
 
-def fetchMajorConcerns(Manual = True, GUIVariables = "N/A", link = None):
-    global concerns
+def fetchMajorConcerns(Manual = False, GUIVariables = "N/A", link = None):
     # if GUI controlled
     if Manual:
         # Get Major Concerns from GUI
         try:
             concerns = GUIVariables
-            return[concerns]
+            return concerns
         except:
             print("YOU IDIOT, YOU DIDNT DECLARE THE VARIABLES")
             return[None]
@@ -41,12 +40,6 @@ def fetchMajorConcerns(Manual = True, GUIVariables = "N/A", link = None):
         # Get Major Concerns from spreadsheet
         concerns = pullSpreedsheet(11, 4, link)
         return concerns 
-
-def updateGonogo():
-    return[Range, weather, vehicle]
-
-def updateMajorConcerns():
-    return concerns
 
 def pullSpreedsheet(inputCol, inputRow, link):
     col = int(inputCol) - 1
@@ -69,18 +62,29 @@ def pullSpreedsheet(inputCol, inputRow, link):
         print(f"[ERROR] Failed to fetch Go/No-Go from sheet: {e}")
         return "N/A"
 
-def getLaunchTime(structTime):
-    global launchTime
-    launchTime = timegm(structTime)
+def countdownTime(countTime, onHold):
+    TimeNow = countTime
+    while True:
+        while onHold == False:
+            t1 = monotonic()
+            TimeNow = TimeNow - 1
+            if TimeNow <= 0: # are we counting up?
+                countUp = True
+            else: countUp = False
+            yield(abs(TimeNow), countUp)
+            t2 = monotonic()
+            sleep(1.0 - (t2 - t1)) # sleep till next seccond
+        HoldTime = 0
+        while onHold:
+            t1 = monotonic()
+            HoldTime = HoldTime + 1
+            yield(HoldTime, True)
+            t2 = monotonic()
+            sleep(1.0 - (t2 - t1)) # sleep till next seccond
 
-def updateCountdown():
-    # are we counting up yet?
-    if time() > launchTime:
-        countUp = False
-    else: countUp = True
-    # return the secconds till or after launchTime
-    # possible overflow, may need to swap time() with monotonic()
-    if countUp:
-        return int(launchTime - time() + 1)
-    else:
-        return int(time() - launchTime)
+
+def convertEpoch(inputTime, isDate):
+    inputTime = timegm(inputTime)
+    if isDate:
+        inputTime - time()
+    return int(inputTime)

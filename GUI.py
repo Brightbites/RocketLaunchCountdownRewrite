@@ -1,20 +1,19 @@
 from Rewrite import *
 import time
 
-link = ""
-fetchGonogo()
-fetchMajorConcerns()
+print(fetchGonogo())
+print(fetchMajorConcerns())
 
-print(updateGonogo())
-print(updateMajorConcerns())
+structTime = time.strptime("1 1 1970 0 0 10", "%d %m %Y %H %M %S")
+isDate = False
+inputTime = convertEpoch(structTime, isDate)
 
-#T and L toggle
-#Scrub
+onHold = False
+for returned in countdownTime(inputTime, onHold):
+    print(returned)
 
-structTime = time.strptime("29 January 2026 20 21 0", "%d %B %Y %H %M %S")
-getLaunchTime(structTime)
-while True:
-    t1 = time.monotonic()
-    print(updateCountdown())
-    t2 = time.monotonic()
-    sleep(1.0 - (t2 - t1))
+# Time Tell launch
+# input in
+
+# Date Time
+#current time - epoch
