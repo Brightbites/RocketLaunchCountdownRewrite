@@ -33,10 +33,10 @@ with dpg.window(tag="Primary Window"):
         dpg.add_button(label="Hold", callback=hold)
         dpg.add_button(label="Scrub", callback=scrub)
         dpg.add_button(label="Toggle T- L-", callback=Ttoggle)
-    
-
-dpg.show_metrics()
-dpg.show_style_editor()
+    with dpg.group(horizontal=True):
+        dpg.add_input_int(label="Hours",min_value=0, max_value=24, width=100, min_clamped=True, max_clamped=True)
+        dpg.add_input_int(label="Minutes",min_value=0, max_value=59, width=100, min_clamped=True, max_clamped=True)
+        dpg.add_input_int(label="Secconds",min_value=0, max_value=59, width=100, min_clamped=True, max_clamped=True)
 
 dpg.setup_dearpygui()
 dpg.show_viewport()

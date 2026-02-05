@@ -65,7 +65,7 @@ def pullSpreedsheet(inputCol, inputRow, link):
 def countdownTime(countTime, onHold):
     TimeNow = countTime
     while True:
-        while onHold == False:
+        while not onHold:
             t1 = monotonic()
             TimeNow = TimeNow - 1
             if TimeNow <= 0: # are we counting up?
