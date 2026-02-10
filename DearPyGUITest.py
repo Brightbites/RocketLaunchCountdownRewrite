@@ -22,6 +22,7 @@ with dpg.window(tag="Primary Window"):
         dpg.add_input_int(min_value=0, max_value=23, min_clamped=True, max_clamped=True, step=0, tag="Hours")
         dpg.add_input_int(min_value=0, max_value=59, min_clamped=True, max_clamped=True, step=0, tag="Minutes")
         dpg.add_input_int(min_value=0, max_value=59, min_clamped=True, max_clamped=True, step=0, tag="Seconds")
+        dpg.add_button(label="Toggle Date Till", tag="toggleDate", callback="toggleDateView")
     with dpg.group(horizontal=True):
         dpg.add_input_int(min_value=1, max_value=31, min_clamped=True, max_clamped=True, step=0, tag="Day")
         dpg.add_input_int(min_value=1, max_value=12, min_clamped=True, max_clamped=True, step=0, tag="Month")
@@ -35,7 +36,16 @@ with dpg.window(tag="Primary Window"):
     
     with dpg.tooltip("Seconds"):
         dpg.add_text("Seconds")
-
+    
+    with dpg.tooltip("Day"):
+        dpg.add_text("Day")
+    
+    with dpg.tooltip("Month"):
+        dpg.add_text("Month")
+    
+    with dpg.tooltip("Year"):
+        dpg.add_text("Year")
+    
     dpg.bind_font(second_font)
     dpg.bind_item_font(BIG, default_font)
 
@@ -57,7 +67,7 @@ while dpg.is_dearpygui_running():
     dpg.configure_item("Hours", width=int((dpg.get_viewport_client_width() / 4) - 10))
     dpg.configure_item("Minutes", width=int((dpg.get_viewport_client_width() / 4) - 10))
     dpg.configure_item("Seconds", width=int((dpg.get_viewport_client_width() / 4) - 10))
-    #dpg.configure_item("toggleDate",width=int((dpg.get_viewport_client_width() / 4) - 11))
+    dpg.configure_item("toggleDate",width=int((dpg.get_viewport_client_width() / 4) - 10))
     dpg.render_dearpygui_frame()
 
 dpg.destroy_context()
