@@ -62,25 +62,11 @@ def pullSpreedsheet(inputCol, inputRow, link):
         print(f"[ERROR] Failed to fetch Go/No-Go from sheet: {e}")
         return "N/A"
 
-def countdownTime(countTime, onHold):
-    TimeNow = countTime
-    while True:
-        while not onHold:
-            t1 = monotonic()
-            TimeNow = TimeNow - 1
-            if TimeNow <= 0: # are we counting up?
-                countUp = True
-            else: countUp = False
-            yield(abs(TimeNow), countUp)
-            t2 = monotonic()
-            sleep(1.0 - (t2 - t1)) # sleep till next seccond
-        HoldTime = 0
-        while onHold:
-            t1 = monotonic()
-            HoldTime = HoldTime + 1
-            yield(HoldTime, True)
-            t2 = monotonic()
-            sleep(1.0 - (t2 - t1)) # sleep till next seccond
+def countTime(timeNow):
+    pass
+
+def holdTime(timeNow):
+    pass
 
 
 def convertEpoch(inputTime, isDate):
