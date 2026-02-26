@@ -22,7 +22,7 @@ def toggleDate():
         dpg.configure_item("yearTooltip", show=True)
 
 dpg.create_context()
-dpg.create_viewport(title='RocketLaunchCountdown', min_width=600, min_height=400, width=600, height=400)
+dpg.create_viewport(title='RocketLaunchCountdown', min_width=900, min_height=300, width=900, height=400)
 
 with dpg.font_registry():
     # first argument ids the path to the .ttf or .otf file
@@ -76,7 +76,9 @@ dpg.set_primary_window("Primary Window", True)
 
 currentViewportSize = 0
 seccondPassed = 0
-dateInputVisable = True  
+dateInputVisable = True
+onHold = False
+Ltoggle = False
 
 while dpg.is_dearpygui_running(): # on every frame
 
@@ -95,17 +97,26 @@ while dpg.is_dearpygui_running(): # on every frame
         dpg.configure_item("Seconds", width=int((currentViewportSize / 4) - 10))
         dpg.configure_item("toggleDate",width=int((currentViewportSize / 4) - 10))
             
-    #if seccondPassed == abs(time.monotonic()): # has a seccond passed since last run
-    #    seccondPassed = abs(time.monotonic() + 1)
-    #    if not onHold:
-    #        countTime = backend.countTime(countTime)
-    #        displayTime = abs(countTime)
-    #        holdTime = 0
-    #    else:
-    #        holdTime = backend.holdTime(holdTime)
-    #        displayTime = abs(countTime)
-        
-    #update button to display time
+    if seccondPassed == int(time.monotonic()): # has a seccond passed since last run
+        seccondPassed = int(time.monotonic() + 1)
+        if not onHold:
+            launchTime = launchTime - 1
+            if launchTime <= 0: # are we counting up?
+                if Ltoggle:
+                    countUp = "L+"
+                else: countUp = "T+"
+            else:
+                if Ltoggle:
+                    countUp = "L-"
+                else: countUp = "T-"
+            absTime = abs(launchTime)
+            displayTime = time.gmtime(absTime)
+            dpg.configure_item("text item", label=f"{countUp} {displayTime.tm_hour}:{displayTime.tm_min}:{displayTime.tm_sec}")
+        else:
+            holdTime = holdTime + 1
+            absTime = abs(holdTime)
+            displayTime = time.gmtime(absTime)
+            dpg.configure_item("text item", label=f"H+ {displayTime.tm_hour}:{displayTime.tm_min}:{displayTime.tm_sec}")
 
     dpg.render_dearpygui_frame()
 

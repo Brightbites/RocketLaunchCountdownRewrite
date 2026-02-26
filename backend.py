@@ -62,13 +62,6 @@ def pullSpreedsheet(inputCol, inputRow, link):
         print(f"[ERROR] Failed to fetch Go/No-Go from sheet: {e}")
         return "N/A"
 
-def countTime(timeNow):
-    pass
-
-def holdTime(timeNow):
-    pass
-
-
 def convertEpoch(inputTime, isDate):
     inputTime = timegm(inputTime)
     if isDate:
