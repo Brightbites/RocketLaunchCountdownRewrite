@@ -21,6 +21,29 @@ def toggleDate():
         dpg.configure_item("monthTooltip", show=True)
         dpg.configure_item("yearTooltip", show=True)
 
+def toggleTimer():
+    global seccondPassed
+    global launchTime
+    global Ltoggle
+    if not seccondPassed == 0:
+        if Ltoggle:
+            countUp = "L-"
+        else: countUp = "T-"
+        dpg.configure_item("Timer", label=f"{countUp} 00:00:00")
+        seccondPassed = 0
+    else:
+        seccondPassed = int(time.monotonic())
+        if dateInputVisable:
+            dateInput = time.strptime(f"{dpg.get_value("Hours")} {dpg.get_value("Minutes")} {dpg.get_value("Seconds")} {dpg.get_value("Day")} {dpg.get_value("Month")} {dpg.get_value("Year")}", "%H %M %S %d %m %Y")
+        else: dateInput = time.strptime(f"{dpg.get_value("Hours")} {dpg.get_value("Minutes")} {dpg.get_value("Seconds")}", "%H %M %S")
+        launchTime = backend.convertEpoch(dateInput, dateInputVisable)
+
+def tToggle():
+    global Ltoggle
+    if Ltoggle:
+        Ltoggle = False
+    else: Ltoggle = True
+
 dpg.create_context()
 dpg.create_viewport(title='RocketLaunchCountdown', min_width=900, min_height=300, width=900, height=400)
 
@@ -30,13 +53,13 @@ with dpg.font_registry():
     second_font = dpg.add_font("OpenSans-Medium.ttf", 36)
 
 with dpg.window(tag="Primary Window"):
-    timer = dpg.add_button(label="T- 00:00:00", tag="text item")
+    timer = dpg.add_button(label="T- 00:00:00", tag="Timer")
     dpg.add_separator()
     with dpg.group(horizontal=True):
-        dpg.add_button(label="Start", tag="Start")
+        dpg.add_button(label="Start", tag="Start", callback=toggleTimer)
         dpg.add_button(label="Hold", tag="Hold")
         dpg.add_button(label="Scrub", tag="Scrub")
-        dpg.add_button(label="Toggle T- L-", tag="toggle")
+        dpg.add_button(label="Toggle T- L-", tag="toggle", callback=tToggle)
     with dpg.group(horizontal=True):
         dpg.add_input_int(min_value=0, max_value=23, min_clamped=True, max_clamped=True, step=0, tag="Hours")
         dpg.add_input_int(min_value=0, max_value=59, min_clamped=True, max_clamped=True, step=0, tag="Minutes")
@@ -84,7 +107,7 @@ while dpg.is_dearpygui_running(): # on every frame
 
     if not dpg.get_viewport_client_width() == currentViewportSize: # has it been resized
         currentViewportSize = dpg.get_viewport_client_width()
-        dpg.configure_item("text item", width=int(currentViewportSize - 16))
+        dpg.configure_item("Timer", width=int(currentViewportSize - 16))
         dpg.configure_item("Start", width=int((currentViewportSize / 4) - 10))
         dpg.configure_item("Hold", width=int((currentViewportSize / 4) - 10))
         dpg.configure_item("Scrub", width=int((currentViewportSize / 4) - 10))
@@ -111,12 +134,12 @@ while dpg.is_dearpygui_running(): # on every frame
                 else: countUp = "T-"
             absTime = abs(launchTime)
             displayTime = time.gmtime(absTime)
-            dpg.configure_item("text item", label=f"{countUp} {displayTime.tm_hour}:{displayTime.tm_min}:{displayTime.tm_sec}")
+            dpg.configure_item("Timer", label=f"{countUp} {displayTime.tm_hour}:{displayTime.tm_min}:{displayTime.tm_sec}")
         else:
             holdTime = holdTime + 1
             absTime = abs(holdTime)
             displayTime = time.gmtime(absTime)
-            dpg.configure_item("text item", label=f"H+ {displayTime.tm_hour}:{displayTime.tm_min}:{displayTime.tm_sec}")
+            dpg.configure_item("Timer", label=f"H+ {displayTime.tm_hour}:{displayTime.tm_min}:{displayTime.tm_sec}")
 
     dpg.render_dearpygui_frame()
 
